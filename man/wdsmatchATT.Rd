@@ -22,75 +22,99 @@ wdsmatchATT(
 )
 }
 \arguments{
-\item{Y}{Numeric vector of observed outcomes.}
+\item{Y}{Finite numeric vector of observed outcomes, with no missing values.}
 
-\item{X}{Numeric matrix or data frame of covariates.}
+\item{X}{Numeric matrix or data frame with finite numeric covariate columns,
+one row per unit, and unique names other than \code{Y} or \code{Z}.}
 
-\item{Z}{Binary treatment assignment indicator (1 = treated, 0 = control).}
+\item{Z}{Binary treatment indicator (1 = treated, 0 = control), with one
+entry per unit and both groups represented.}
 
-\item{weights}{Numeric vector of survey design weights. Required.}
+\item{weights}{Finite, strictly positive numeric vector of survey design
+weights, with one entry per unit. Required.}
 
-\item{M}{Number of nearest neighbors for matching (default 5).}
+\item{M}{Positive integer number of nearest neighbors (default 5). Each
+required donor arm must contain at least \code{M} units.}
 
-\item{ps}{Numeric vector of pre-estimated propensity scores. If
-\code{NULL} (default), estimated internally using \code{model.ps}.}
+\item{ps}{Optional finite numeric vector of pre-estimated propensity
+probabilities strictly between zero and one. If \code{NULL} (default),
+estimate internally using \code{model.ps}. Supplied scores remain fixed
+during replication; see Details.}
 
-\item{pg}{Numeric matrix of pre-estimated prognostic scores with columns
-\code{psi0} (control) and \code{psi1} (treated). If \code{NULL}
-(default), estimated internally using \code{model.pg}.}
+\item{pg}{Optional matrix of pre-estimated prognostic scores, with columns
+\code{psi0} (control) and \code{psi1} (treated) in that order and one row
+per unit. PATT also accepts a one-column matrix containing only the
+control-side score; with two columns, only the first is used.
+If \code{NULL} (default),
+estimate the required arm-specific scores using \code{model.pg}. Supplied
+scores remain fixed during replication; see Details.}
 
-\item{model.ps}{Formula for propensity score model (e.g.,
-\code{Z ~ X1 + X2}). If \code{NULL}, uses all columns of \code{X}.}
+\item{model.ps}{Formula for the propensity model, such as
+\code{Z ~ X1 + X2}. If \code{NULL}, use all columns of \code{X}.
+Used only when \code{ps} is \code{NULL}.}
 
-\item{model.pg}{Formula for prognostic score model (e.g.,
-\code{Y ~ X1 + X2}). If \code{NULL}, uses all columns of \code{X}.}
+\item{model.pg}{Formula for the prognostic regression, such as
+\code{Y ~ X1 + X2}. If \code{NULL}, use all columns of \code{X}.
+Used only when \code{pg} is \code{NULL}.}
 
 \item{sampling}{Character: \code{"retrospective"} (default) for
-treatment-dependent sampling (survey-weighted PS estimation), or
-\code{"prospective"} for treatment-independent sampling
-(unweighted PS estimation).}
+treatment-dependent sampling with survey-weighted propensity fitting, or
+\code{"prospective"} for treatment-independent sampling with unweighted
+propensity fitting. This choice also applies to replication refits.}
 
-\item{use.bias.correction}{Logical: apply polynomial sieve bias correction
-(default \code{TRUE}).}
+\item{use.bias.correction}{Logical: apply the arm-specific complete
+quadratic bias correction (default \code{TRUE}); see Details for the
+interpretation of \code{FALSE}.}
 
-\item{varest}{Logical: compute bootstrap variance estimate and confidence
-interval (default \code{TRUE}).}
+\item{varest}{Logical: compute replication variance and a centered normal
+Wald interval (default \code{TRUE}).}
 
-\item{boots}{Number of multinomial bootstrap replicates (default 200).}
+\item{boots}{Integer number of multinomial replicates, at least 2 when
+variance is requested (default 200).}
 
-\item{alpha}{Significance level for confidence intervals (default 0.05).}
+\item{alpha}{Significance level strictly between zero and one (default
+0.05). The interval confidence level is \code{1 - alpha}.}
 }
 \value{
-A list with components:
-  \item{estimate}{Point estimate of PATT.}
-  \item{se}{Bootstrap standard error (if \code{varest = TRUE}).}
-  \item{ci}{Confidence interval as \code{c(lower, upper)}
-    (if \code{varest = TRUE}).}
-  \item{boot.estimates}{Vector of bootstrap replicate estimates
-    (if \code{varest = TRUE}).}
-  \item{M}{Number of matches used.}
-  \item{n}{Sample size.}
-  \item{n.treated}{Number of treated units.}
-  \item{n.control}{Number of control units.}
-  \item{call}{The matched call.}
+A list of class \code{wdsmatch} with the same components as
+  \code{\link{wdsmatchATE}}, with \code{estimate} targeting PATT and
+  \code{estimand} identifying PATT.
 }
 \description{
 Estimates the population average treatment effect on the treated (PATT)
-using weighted double score matching (WDSM) with survey design weights.
-Performs one-sided matching from treated to control units on the
-control-side double score D_0(X) = (e(X), Psi_0(X)). Only the
-counterfactual control outcome Y(0) needs imputation; treated outcomes
-are directly observed. Aggregation uses Hajek normalization over
-treated-side survey weights. Polynomial sieve bias correction and
-linearization-based multinomial bootstrap with survey-weighted reuse
-frequencies are applied. PATT requires only one-sided
-unconfoundedness: Y(0) independent of Z given X.
+using survey-weighted double score matching. Treated units are matched to
+controls using the control-side double score consisting of propensity
+probability and control prognostic score. Only the missing control outcome
+requires imputation; treated outcomes remain observed. Aggregation uses
+treated-side survey weights and Hajek normalization.
+}
+\details{
+PATT uses only the control-side prognostic and bias-correction regressions;
+a treated-outcome regression is not required. Treatment identification uses
+one-sided unconfoundedness of the control potential outcome, together with
+the required survey identification, positivity, and regularity assumptions.
+
+Matching, score fitting, arm-specific quadratic bias correction, strict
+numerical checks, and the behavior of supplied scores follow
+\code{\link{wdsmatchATE}}. The PATT replication expression retains the
+original weighted control reuse coefficients and normalizes by the
+replicate's treated-side survey-weight total. Variance uses divisor
+\code{boots}; intervals are centered normal Wald intervals. All requested
+replicates must succeed, otherwise an informative error is raised.
+
+Supplied scores remain fixed during replication, so their external
+estimation uncertainty is excluded. With
+\code{use.bias.correction = FALSE}, matching discrepancies remain and the
+bias-corrected asymptotic justification does not automatically apply.
+The weight-only interface and individual-unit multinomial replication do
+not provide general variance estimation for arbitrary clustered or
+stratified survey designs. See \code{\link{wdsmatchATE}} for full details.
 }
 \examples{
 data(survey_obs)
 fit <- wdsmatchATT(
   Y = survey_obs$Y,
-  X = survey_obs[, c("X1","X2","X3","X4","X5","X6")],
+  X = survey_obs[, c("X1", "X2", "X3", "X4", "X5", "X6")],
   Z = survey_obs$Z,
   weights = survey_obs$survey_weight,
   M = 3,

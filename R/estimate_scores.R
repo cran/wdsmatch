@@ -1,45 +1,39 @@
-#' @keywords internal
+# Fit only nuisance components required by the estimand. Supplied scores stay fixed.
 estimate_scores <- function(Y, X, Z, sw = NULL, ps = NULL, pg = NULL,
                             model.ps = NULL, model.pg = NULL,
-                            sampling = "retrospective") {
+                            sampling = "retrospective", estimand = "PATE",
+                            multiplicity = rep(1, length(Y)),
+                            use.bias.correction = TRUE) {
   n <- length(Y)
-  df <- data.frame(Z = Z, Y = Y, X)
-
+  df <- data.frame(Z = Z, Y = Y, X, check.names = FALSE)
+  if (is.null(sw)) sw <- rep(1, n)
   if (is.null(ps)) {
-    if (is.null(model.ps)) {
-      xnames <- colnames(X)
-      model.ps <- stats::as.formula(paste("Z ~", paste(xnames, collapse = " + ")))
-    }
-    use_sw <- (sampling == "retrospective" && !is.null(sw))
-    if (use_sw) {
-      ps_fit <- eval(substitute(
-        stats::glm(model.ps, data = df, family = stats::quasibinomial(link = "logit"),
-                   weights = WTS),
-        list(WTS = sw)
-      ))
-    } else {
-      ps_fit <- stats::glm(model.ps, data = df, family = stats::quasibinomial(link = "logit"))
-    }
-    ps <- ps_fit$fitted.values
-  }
-
-  if (is.null(pg)) {
-    if (is.null(model.pg)) {
-      xnames <- colnames(X)
-      model.pg <- stats::as.formula(paste("Y ~", paste(xnames, collapse = " + ")))
-    }
-    psi0 <- rep(NA_real_, n)
-    psi1 <- rep(NA_real_, n)
-    pg0_fit <- stats::lm(model.pg, data = df[Z == 0, ])
-    psi0 <- stats::predict(pg0_fit, newdata = df)
-    pg1_fit <- stats::lm(model.pg, data = df[Z == 1, ])
-    psi1 <- stats::predict(pg1_fit, newdata = df)
-    pg <- cbind(psi0 = as.numeric(psi0), psi1 = as.numeric(psi1))
+    ps_weights <- multiplicity * if (sampling == "retrospective") sw else 1
+    fit <- wdsm_fit_ps(model.ps, df, ps_weights)
+    ps <- fit$probability
+    diagnostics <- fit$diagnostics
   } else {
-    if (is.vector(pg)) stop("pg must be a 2-column matrix (psi0, psi1)")
-    if (ncol(pg) == 1) pg <- cbind(pg, pg)
+    diagnostics <- list(source = "supplied_fixed", probability_range = range(ps))
   }
-
-  list(ps = as.numeric(ps), psi0 = pg[, 1], psi1 = pg[, 2],
-       ps_logit = safe_logit(ps))
+  result <- list(ps = ps, e_score = ps, ps_diagnostics = diagnostics,
+                 psi0 = NULL, psi1 = NULL, q0 = rep(0, n), q1 = rep(0, n),
+                 D0 = NULL, D1 = NULL)
+  for (arm in if (estimand == "PATE") 0:1 else 0L) {
+    idx <- which(Z == arm)
+    prognostic <- if (is.null(pg)) {
+      wdsm_fit_regression(model.pg, df[idx, , drop = FALSE], df,
+                          multiplicity[idx], paste("Arm", arm, "prognostic"))
+    } else pg[, arm + 1L]
+    score <- wdsm_standardize(cbind(ps, prognostic), multiplicity)
+    if (use.bias.correction) {
+      sieve <- wdsm_sieve(score)
+      regression_data <- data.frame(Y = Y[idx], sieve[idx, , drop = FALSE])
+      result[[paste0("q", arm)]] <- wdsm_fit_regression(
+        Y ~ ., regression_data, sieve, multiplicity[idx] * sw[idx],
+        paste("Arm", arm, "bias correction"))
+    }
+    result[[paste0("psi", arm)]] <- as.numeric(prognostic)
+    result[[paste0("D", arm)]] <- score
+  }
+  result
 }

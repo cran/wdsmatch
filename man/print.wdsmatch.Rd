@@ -10,7 +10,7 @@
 \item{x}{A \code{wdsmatch} object returned by \code{\link{wdsmatchATE}}
 or \code{\link{wdsmatchATT}}.}
 
-\item{digits}{Number of significant digits.}
+\item{digits}{Number of decimal places.}
 
 \item{...}{Additional arguments (ignored).}
 }

@@ -45,7 +45,7 @@ test_that("wdsmatchATE with bootstrap produces valid CI", {
   expect_true(fit$ci[1] < fit$ci[2])
   expect_true(fit$ci[1] < fit$estimate)
   expect_true(fit$ci[2] > fit$estimate)
-  expect_true(length(fit$boot.estimates) >= 25)
+  expect_length(fit$boot.estimates, 50L)
 })
 
 test_that("wdsmatchATE validates inputs correctly", {
@@ -88,7 +88,6 @@ test_that("wdsmatchATE accepts pre-computed scores", {
 })
 
 test_that("wdsmatchATE with custom model formulas works", {
-  skip_on_cran()
   set.seed(22)
   n <- 200
   X <- data.frame(X1 = rnorm(n), X2 = rnorm(n), X3 = rnorm(n))

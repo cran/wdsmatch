@@ -2,7 +2,7 @@ Package: wdsmatch
 Type: Package
 Title: Weighted Double Score Matching for Survey-Weighted Causal
         Inference
-Version: 0.1.1
+Version: 0.2.0
 Authors@R: c(
     person("Yukang", "Zeng", email = "ykzeng2019@gmail.com", role = c("aut", "cre")),
     person("Guangyu", "Tong", role = "aut"),
@@ -17,14 +17,14 @@ Description: Implements weighted double score matching (WDSM) for estimating
     normalization to target the population average treatment effect (PATE) and
     the population average treatment effect on the treated (PATT). Supports
     both retrospective (treatment-dependent) and prospective
-    (treatment-independent) sampling designs. Achieves double robustness:
-    consistent estimation when either the propensity score or prognostic score
-    model is correctly specified. Provides polynomial sieve bias correction
-    and linearization-based multinomial bootstrap variance estimation that
-    preserves the survey-weighted matching structure without re-matching.
-    Methods are described in Zeng, Tong, Tong, Lu, Mukherjee, and Li
-    (2026, under review) "Where to weight? Estimating population causal
-    effects with weighted double score matching in complex surveys".
+    (treatment-independent) sampling designs. Uses propensity probabilities
+    and arm-specific prognostic scores for matching, with a complete quadratic
+    bias correction in each arm's double score. Provides linearization-based
+    multinomial replication variance estimates and centered normal Wald
+    confidence intervals, retaining the original matching reuse coefficients
+    without re-matching. Supplied scores can be held fixed for inference
+    conditional on those scores. This weight-only interface does not encode
+    survey strata, clusters, or design-specific replicate weights.
 License: GPL-3
 Encoding: UTF-8
 LazyData: true
@@ -33,10 +33,9 @@ Depends: R (>= 3.5.0)
 Imports: stats
 Suggests: testthat (>= 3.0.0), knitr, rmarkdown
 Config/testthat/edition: 3
-URL: https://github.com/ykzeng-yale/wdsmatch
-BugReports: https://github.com/ykzeng-yale/wdsmatch/issues
+URL: https://cran.r-project.org/package=wdsmatch
 NeedsCompilation: no
-Packaged: 2026-04-16 16:21:58 UTC; yukang
+Packaged: 2026-09-11 20:42:00 UTC; root
 Author: Yukang Zeng [aut, cre],
   Guangyu Tong [aut],
   Jiaqi Tong [aut],
@@ -45,4 +44,4 @@ Author: Yukang Zeng [aut, cre],
   Fan Li [aut]
 Maintainer: Yukang Zeng <ykzeng2019@gmail.com>
 Repository: CRAN
-Date/Publication: 2026-04-21 19:00:02 UTC
+Date/Publication: 2026-09-11 21:20:02 UTC

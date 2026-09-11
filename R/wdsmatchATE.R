@@ -1,74 +1,130 @@
 #' Weighted Double Score Matching Estimator for Population Average Treatment Effect
 #'
 #' Estimates the population average treatment effect (PATE) using weighted
-#' double score matching (WDSM) with survey design weights. The method
-#' matches treated and control units on arm-specific double scores
-#' D_z(X) = (e(X), Psi_z(X)) for z in \{0,1\}, imputes missing potential
-#' outcomes via survey-weighted averaging within match sets, and aggregates
-#' using Hajek normalization. Polynomial sieve bias correction removes the
-#' finite-sample matching discrepancy. Variance estimation uses a
-#' linearization-based multinomial bootstrap that re-estimates score
-#' parameters while preserving the original matching structure and
-#' survey-weighted reuse frequencies.
+#' double score matching with survey design weights. Matching uses propensity
+#' probabilities and arm-specific prognostic scores. Missing potential outcomes
+#' are imputed by survey-weighted averaging within match sets and aggregated
+#' using Hajek normalization. Optional polynomial bias correction adjusts for
+#' matching discrepancies. Inference uses fixed-reuse multinomial replication
+#' with centered normal Wald intervals.
 #'
 #' @details
-#' The estimator achieves double robustness: it is consistent when either the
-#' propensity score model or the prognostic score model is correctly specified.
+#' Under retrospective sampling, the propensity score is fitted with survey
+#' weights; under prospective sampling it is fitted without survey weights.
+#' Prognostic regressions are unweighted within each treatment arm in both
+#' designs. These modeling choices require the corresponding identification
+#' and sampling assumptions; weighting alone does not establish those assumptions.
 #'
-#' Under retrospective sampling (\code{sampling = "retrospective"}), the
-#' propensity score is estimated with survey weights to recover the
-#' population-level treatment assignment mechanism. Under prospective sampling
-#' (\code{sampling = "prospective"}), the propensity score is estimated
-#' without survey weights. Prognostic scores are always estimated without
-#' survey weights, as the conditional outcome mean is invariant to the
-#' sampling design.
+#' Matching uses unweighted pooled standardization of propensity probabilities
+#' and the relevant prognostic score. The bias-correction regression uses survey
+#' weights and a complete quadratic basis in that arm's own double score:
+#' an intercept, both coordinates, their squares, and their interaction.
+#' Distances are Euclidean, matching is with replacement, and distance ties are
+#' resolved by the original donor row order. Propensity fitting starts from zero
+#' coefficients and checks convergence and finite, nonsaturated fitted probabilities.
 #'
-#' The sieve basis uses log-odds of the propensity score to match the
-#' coordinate system used in matching distance computation.
+#' Multinomial replication draws counts for the original sample units and keeps
+#' the original match sets and weighted reuse coefficients fixed. With bias
+#' correction enabled, internally estimated nuisance scores are refitted using
+#' the counts, with additional
+#' survey weighting for retrospective propensity fitting and outcome bias
+#' correction. Supplied scores remain fixed. Thus, when scores are supplied,
+#' the resulting inference is conditional on them and excludes uncertainty
+#' from their external estimation. The corresponding model formula is not used
+#' to replace a supplied score during replication.
 #'
-#' @param Y Numeric vector of observed outcomes.
-#' @param X Numeric matrix or data frame of covariates.
-#' @param Z Binary treatment assignment indicator (1 = treated, 0 = control).
-#' @param weights Numeric vector of survey design weights. Required.
-#' @param M Number of nearest neighbors for matching (default 5).
-#' @param ps Numeric vector of pre-estimated propensity scores. If
-#'   \code{NULL} (default), estimated internally using \code{model.ps}.
-#' @param pg Numeric matrix of pre-estimated prognostic scores with columns
-#'   \code{psi0} (control) and \code{psi1} (treated). If \code{NULL}
-#'   (default), estimated internally using \code{model.pg}.
-#' @param model.ps Formula for propensity score model (e.g.,
-#'   \code{Z ~ X1 + X2}). If \code{NULL}, uses all columns of \code{X}.
-#' @param model.pg Formula for prognostic score model (e.g.,
-#'   \code{Y ~ X1 + X2}). If \code{NULL}, uses all columns of \code{X}.
+#' With \code{B = boots} successful replicates, the variance estimate is
+#' \code{mean((boot.estimates - mean(boot.estimates))^2)}, using divisor B.
+#' The interval is \code{estimate + c(-1, 1) * qnorm(1 - alpha/2) * se}.
+#' All requested replicates must succeed. An invalid fit, degenerate score,
+#' unsuccessful replicate, or nonfinite calculation raises an error; failed
+#' draws are not omitted or replaced by zeros. A successful numerical check
+#' does not establish adequate statistical overlap.
+#'
+#' With \code{use.bias.correction = FALSE}, point estimation uses direct
+#' matched imputation without polynomial outcome adjustment, and replication
+#' uses the fixed-reuse expression without a bias-correction regression.
+#' Unused nuisance scores are not refitted for these raw fixed-match replicates.
+#' Matching discrepancies remain, so the asymptotic justification for the
+#' bias-corrected estimator does not automatically apply to this option.
+#'
+#' Double robustness concerns consistency under the stated identification,
+#' sampling, positivity, and regularity assumptions when a required score model
+#' is correctly specified; it does not guarantee negligible finite-sample bias
+#' or nominal interval coverage in every setting. This interface accepts
+#' unit-level weights, not survey strata, clusters, or design-specific replicate
+#' weights. The individual-unit multinomial procedure is not a general variance
+#' estimator for arbitrary complex survey designs.
+#'
+#' @param Y Finite numeric vector of observed outcomes, with no missing values.
+#' @param X Numeric matrix or data frame with finite numeric covariate columns,
+#'   one row per unit, and unique names other than \code{Y} or \code{Z}.
+#' @param Z Binary treatment indicator (1 = treated, 0 = control), with one
+#'   entry per unit and both groups represented.
+#' @param weights Finite, strictly positive numeric vector of survey design
+#'   weights, with one entry per unit. Required.
+#' @param M Positive integer number of nearest neighbors (default 5). Each
+#'   required donor arm must contain at least \code{M} units.
+#' @param ps Optional finite numeric vector of pre-estimated propensity
+#'   probabilities strictly between zero and one. If \code{NULL} (default),
+#'   estimate internally using \code{model.ps}. Supplied scores remain fixed
+#'   during replication; see Details.
+#' @param pg Optional matrix of pre-estimated prognostic scores, with columns
+#'   \code{psi0} (control) and \code{psi1} (treated) in that order and one row
+#'   per unit. PATT also accepts a one-column matrix containing only the
+#'   control-side score; with two columns, only the first is used.
+#'   If \code{NULL} (default),
+#'   estimate the required arm-specific scores using \code{model.pg}. Supplied
+#'   scores remain fixed during replication; see Details.
+#' @param model.ps Formula for the propensity model, such as
+#'   \code{Z ~ X1 + X2}. If \code{NULL}, use all columns of \code{X}.
+#'   Used only when \code{ps} is \code{NULL}.
+#' @param model.pg Formula for the prognostic regression, such as
+#'   \code{Y ~ X1 + X2}. If \code{NULL}, use all columns of \code{X}.
+#'   Used only when \code{pg} is \code{NULL}.
 #' @param sampling Character: \code{"retrospective"} (default) for
-#'   treatment-dependent sampling (survey-weighted PS estimation), or
-#'   \code{"prospective"} for treatment-independent sampling
-#'   (unweighted PS estimation).
-#' @param use.bias.correction Logical: apply polynomial sieve bias correction
-#'   (default \code{TRUE}).
-#' @param varest Logical: compute bootstrap variance estimate and confidence
-#'   interval (default \code{TRUE}).
-#' @param boots Number of multinomial bootstrap replicates (default 200).
-#' @param alpha Significance level for confidence intervals (default 0.05).
+#'   treatment-dependent sampling with survey-weighted propensity fitting, or
+#'   \code{"prospective"} for treatment-independent sampling with unweighted
+#'   propensity fitting. This choice also applies to replication refits.
+#' @param use.bias.correction Logical: apply the arm-specific complete
+#'   quadratic bias correction (default \code{TRUE}); see Details for the
+#'   interpretation of \code{FALSE}.
+#' @param varest Logical: compute replication variance and a centered normal
+#'   Wald interval (default \code{TRUE}).
+#' @param boots Integer number of multinomial replicates, at least 2 when
+#'   variance is requested (default 200).
+#' @param alpha Significance level strictly between zero and one (default
+#'   0.05). The interval confidence level is \code{1 - alpha}.
 #'
-#' @return A list with components:
+#' @return A list of class \code{wdsmatch} with components:
 #'   \item{estimate}{Point estimate of PATE.}
-#'   \item{se}{Bootstrap standard error (if \code{varest = TRUE}).}
-#'   \item{ci}{Confidence interval as \code{c(lower, upper)}
-#'     (if \code{varest = TRUE}).}
-#'   \item{boot.estimates}{Vector of bootstrap replicate estimates
-#'     (if \code{varest = TRUE}).}
+#'   \item{variance}{Replication variance with divisor B, or \code{NA} when
+#'     \code{varest = FALSE}.}
+#'   \item{se}{Replication standard error, or \code{NA} without inference.}
+#'   \item{ci}{Centered normal Wald interval as \code{c(lower, upper)}, or
+#'     two \code{NA} values without inference.}
+#'   \item{boot.estimates}{All requested finite replication estimates, or
+#'     \code{NULL} without inference.}
+#'   \item{alpha}{Requested significance level.}
+#'   \item{interval.type}{Interval-construction metadata.}
+#'   \item{variance.divisor}{Replication-variance divisor metadata.}
+#'   \item{n.boot}{Number of retained replicates.}
+#'   \item{estimand}{Target estimand.}
+#'   \item{sampling}{Sampling-design option.}
+#'   \item{settings}{Estimation and replication settings.}
 #'   \item{M}{Number of matches used.}
 #'   \item{n}{Sample size.}
 #'   \item{n.treated}{Number of treated units.}
 #'   \item{n.control}{Number of control units.}
 #'   \item{call}{The matched call.}
+#'   \item{diagnostics}{Point-representation agreement and numerical
+#'     propensity-fit diagnostics for the point estimate and replicates.}
 #'
 #' @examples
 #' data(survey_obs)
 #' fit <- wdsmatchATE(
 #'   Y = survey_obs$Y,
-#'   X = survey_obs[, c("X1","X2","X3","X4","X5","X6")],
+#'   X = survey_obs[, c("X1", "X2", "X3", "X4", "X5", "X6")],
 #'   Z = survey_obs$Z,
 #'   weights = survey_obs$survey_weight,
 #'   M = 3,
@@ -87,50 +143,8 @@ wdsmatchATE <- function(Y, X, Z, weights, M = 5,
                         use.bias.correction = TRUE,
                         varest = TRUE, boots = 200, alpha = 0.05) {
   cl <- match.call()
-  sampling <- match.arg(sampling)
-
-  if (missing(weights) || is.null(weights)) stop("'weights' are required for WDSM.")
-  if (!is.numeric(Y)) stop("'Y' must be numeric.")
-  if (!all(Z %in% c(0, 1))) stop("'Z' must be binary (0/1).")
-  if (length(Y) != length(Z)) stop("'Y' and 'Z' must have the same length.")
-
-  X <- as.data.frame(X)
-  n <- length(Y)
-
-  scores <- estimate_scores(Y, X, Z, sw = weights, ps = ps, pg = pg,
-                            model.ps = model.ps, model.pg = model.pg,
-                            sampling = sampling)
-
-  pt <- wdsm_match_ate(Y, Z, weights, scores$ps_logit,
-                       scores$psi0, scores$psi1, M, use.bias.correction)
-  pt$X_internal <- X
-
-  result <- list(
-    estimate = pt$estimate,
-    se = NA_real_, ci = c(NA_real_, NA_real_),
-    boot.estimates = NULL,
-    M = M, n = n,
-    n.treated = sum(Z == 1), n.control = sum(Z == 0),
-    call = cl
-  )
-
-  if (varest) {
-    if (is.null(model.ps)) {
-      xnames <- colnames(X)
-      model.ps <- stats::as.formula(paste("Z ~", paste(xnames, collapse = " + ")))
-    }
-    if (is.null(model.pg)) {
-      xnames <- colnames(X)
-      model.pg <- stats::as.formula(paste("Y ~", paste(xnames, collapse = " + ")))
-    }
-    boot <- wdsm_bootstrap_ate(pt, boots = boots, alpha = alpha,
-                               model.ps = model.ps, model.pg = model.pg,
-                               sampling = sampling)
-    result$se <- boot$se
-    result$ci <- boot$ci
-    result$boot.estimates <- boot$boot_estimates
-  }
-
-  class(result) <- "wdsmatch"
-  result
+  if (missing(weights)) stop("'weights' are required for WDSM.", call. = FALSE)
+  wdsm_run(Y, X, Z, weights, M, ps, pg, model.ps, model.pg,
+           match.arg(sampling), use.bias.correction, varest, boots, alpha,
+           estimand = "PATE", call = cl)
 }
