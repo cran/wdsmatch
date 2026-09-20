@@ -20,23 +20,30 @@ test_that("multinomial score scaling agrees with a literal expanded sample", {
                "Degenerate matching score")
 })
 
-test_that("exact distance ties select donors in original row order", {
+test_that("exact distance ties respect admissible donors and the point identity", {
   Y <- c(2, 10, 6, 12, 8, 4)
   Z <- c(0, 1, 0, 1, 0, 1)
   coordinate <- c(-1, 0, 1, 0, 1, -1)
   scores <- list(D0 = cbind(coordinate, coordinate),
                  D1 = cbind(coordinate, coordinate),
                  q0 = rep(0, 6), q1 = rep(0, 6))
-  fit <- wdsmatch:::wdsm_point(Y, Z, rep(1, 6), scores, 1L, "PATE")
-  # These donor expectations are specified by original row number.
-  # Units 2 and 4 are equidistant from all three controls; units 3 and 5
-  # are equidistant from treated units 2 and 4.
-  expect_identical(fit$matches_0[c(2, 4, 6)], list(1L, 1L, 1L))
-  expect_identical(fit$matches_1[c(1, 3, 5)], list(6L, 2L, 2L))
-  expect_equal(fit$estimate, 14 / 3, tolerance = 1e-12)
-  fit_two <- wdsmatch:::wdsm_point(Y, Z, rep(1, 6), scores, 2L, "PATE")
-  expect_identical(fit_two$matches_0[[2]], c(1L, 3L))
-  expect_identical(fit_two$matches_1[[3]], c(2L, 4L))
+  for (M in 1:2) {
+    fit <- wdsmatch:::wdsm_point(Y,Z,rep(1,6),scores,M,"PATE",tie_seed=2024)
+    direct <- numeric(6)
+    for (i in 1:6) {
+      j <- if(Z[i]==1)fit$matches_0[[i]] else fit$matches_1[[i]]
+      expect_length(j,M)
+      expect_false(anyDuplicated(j)>0)
+      expect_true(all(Z[j]!=Z[i]))
+      distance <- (coordinate-coordinate[i])^2
+      cutoff <- sort(distance[Z!=Z[i]])[M]
+      expect_true(all(distance[j]<=cutoff))
+      expect_true(all(which(Z!=Z[i] & distance<cutoff) %in% j))
+      direct[i] <- (2*Z[i]-1)*(Y[i]-mean(Y[j]))
+    }
+    expect_equal(fit$estimate,mean(direct),tolerance=1e-12)
+    expect_lt(fit$identity_error,1e-12)
+  }
 })
 
 test_that("propensity fitting rejects unidentified and saturated solutions", {

@@ -18,7 +18,9 @@ wdsmatchATT(
   use.bias.correction = TRUE,
   varest = TRUE,
   boots = 200,
-  alpha = 0.05
+  alpha = 0.05,
+  tie.seed = 20260917L,
+  tie.tolerance = 64 * .Machine$double.eps
 )
 }
 \arguments{
@@ -74,6 +76,14 @@ variance is requested (default 200).}
 
 \item{alpha}{Significance level strictly between zero and one (default
 0.05). The interval confidence level is \code{1 - alpha}.}
+
+\item{tie.seed}{Nonnegative integer seed for recipient-specific random
+tie selection (default 20260917), independent of the bootstrap seed.
+Use \code{set.seed()} separately to reproduce bootstrap draws.}
+
+\item{tie.tolerance}{Nonnegative relative tolerance on squared distances.
+The default is \code{64 * .Machine$double.eps}, scaled by the larger
+of one and the Mth squared distance. Set zero to randomize exact ties only.}
 }
 \value{
 A list of class \code{wdsmatch} with the same components as

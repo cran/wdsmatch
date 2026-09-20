@@ -1,18 +1,12 @@
-wdsm_point <- function(Y, Z, weights, scores, M, estimand) {
+wdsm_point <- function(Y, Z, weights, scores, M, estimand,
+    tie_seed = 20260917L, tie_tolerance = 64 * .Machine$double.eps) {
   n <- length(Y)
   treated <- which(Z == 1)
   control <- which(Z == 0)
-  matches_0 <- matches_1 <- vector("list", n)
-  for (i in treated) {
-    distance <- (scores$D0[control, 1L] - scores$D0[i, 1L])^2 +
-                (scores$D0[control, 2L] - scores$D0[i, 2L])^2
-    matches_0[[i]] <- control[order(distance, method = "radix")[seq_len(M)]]
-  }
-  if (estimand == "PATE") for (i in control) {
-    distance <- (scores$D1[treated, 1L] - scores$D1[i, 1L])^2 +
-                (scores$D1[treated, 2L] - scores$D1[i, 2L])^2
-    matches_1[[i]] <- treated[order(distance, method = "radix")[seq_len(M)]]
-  }
+  allocation <- wdsm_make_matches(Z, scores$D0, scores$D1, M, estimand,
+    tie_seed = tie_seed, tie_tolerance = tie_tolerance)
+  matches_0 <- allocation$matches_0
+  matches_1 <- allocation$matches_1
   K <- wdsm_reuse(Z, weights, matches_0, matches_1, estimand)
   contrast <- rep(NA_real_, n)
   for (i in treated) {
@@ -35,5 +29,6 @@ wdsm_point <- function(Y, Z, weights, scores, M, estimand) {
     stop("Direct imputation and original-reuse representations disagree", call. = FALSE)
   list(estimate = estimate, Y = Y, Z = Z, weights = weights,
        K = K, matches_0 = matches_0, matches_1 = matches_1,
-       scores = scores, estimand = estimand, identity_error = identity_error)
+       scores = scores, estimand = estimand, identity_error = identity_error,
+       tie_diagnostics = allocation$tie_diagnostics)
 }

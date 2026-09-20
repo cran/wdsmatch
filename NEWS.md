@@ -1,3 +1,15 @@
+# wdsmatch 0.2.1
+
+* Randomize boundary-distance donor selection independently for each recipient,
+  replacing deterministic original-row priority. Matching remains with
+  replacement and retains exactly M distinct donors per recipient.
+* Add `tie.seed` and `tie.tolerance`, with a separate random stream that preserves
+  the bootstrap stream and caller RNG state. Report tie and donor-reuse diagnostics.
+* Preserve fixed original matches and weighted reuse during replication.
+  No-tie estimates and replication draws are unchanged.
+* Require R >= 3.6.0 for the specified reproducible rejection-sampling RNG.
+* This is a candidate update; the published 0.2.0 artifact is retained.
+
 # wdsmatch 0.2.0
 
 This release corrects the numerical implementation. Point estimates, standard

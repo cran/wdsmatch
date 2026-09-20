@@ -56,10 +56,12 @@ wdsmatchATT <- function(Y, X, Z, weights, M = 5,
                         model.ps = NULL, model.pg = NULL,
                         sampling = c("retrospective", "prospective"),
                         use.bias.correction = TRUE,
-                        varest = TRUE, boots = 200, alpha = 0.05) {
+                        varest = TRUE, boots = 200, alpha = 0.05,
+                        tie.seed = 20260917L,
+                        tie.tolerance = 64 * .Machine$double.eps) {
   cl <- match.call()
   if (missing(weights)) stop("'weights' are required for WDSM.", call. = FALSE)
   wdsm_run(Y, X, Z, weights, M, ps, pg, model.ps, model.pg,
            match.arg(sampling), use.bias.correction, varest, boots, alpha,
-           estimand = "PATT", call = cl)
+           estimand = "PATT", call = cl, tie_seed = tie.seed, tie_tolerance = tie.tolerance)
 }

@@ -18,7 +18,9 @@ wdsmatchATE(
   use.bias.correction = TRUE,
   varest = TRUE,
   boots = 200,
-  alpha = 0.05
+  alpha = 0.05,
+  tie.seed = 20260917L,
+  tie.tolerance = 64 * .Machine$double.eps
 )
 }
 \arguments{
@@ -74,6 +76,14 @@ variance is requested (default 200).}
 
 \item{alpha}{Significance level strictly between zero and one (default
 0.05). The interval confidence level is \code{1 - alpha}.}
+
+\item{tie.seed}{Nonnegative integer seed for recipient-specific random
+tie selection (default 20260917), independent of the bootstrap seed.
+Use \code{set.seed()} separately to reproduce bootstrap draws.}
+
+\item{tie.tolerance}{Nonnegative relative tolerance on squared distances.
+The default is \code{64 * .Machine$double.eps}, scaled by the larger
+of one and the Mth squared distance. Set zero to randomize exact ties only.}
 }
 \value{
 A list of class \code{wdsmatch} with components:
@@ -98,7 +108,8 @@ A list of class \code{wdsmatch} with components:
   \item{n.control}{Number of control units.}
   \item{call}{The matched call.}
   \item{diagnostics}{Point-representation agreement and numerical
-    propensity-fit diagnostics for the point estimate and replicates.}
+    propensity-fit diagnostics for the point estimate and replicates, plus
+    tie counts, seed, tolerance, and donor-reuse diagnostics.}
 }
 \description{
 Estimates the population average treatment effect (PATE) using weighted
@@ -120,8 +131,17 @@ Matching uses unweighted pooled standardization of propensity probabilities
 and the relevant prognostic score. The bias-correction regression uses survey
 weights and a complete quadratic basis in that arm's own double score:
 an intercept, both coordinates, their squares, and their interaction.
-Distances are Euclidean, matching is with replacement, and distance ties are
-resolved by the original donor row order. Propensity fitting starts from zero
+Distances are Euclidean and matching is with replacement. At the Mth-distance
+boundary, the required donors are sampled uniformly without replacement,
+separately for every recipient, while retaining all strictly closer donors.
+A separate, reproducible random-number stream controls this selection and
+leaves the caller's random-number state unchanged. Thus tie randomization
+does not change the bootstrap count stream. Original matches remain fixed
+in replication. Numerical boundary equivalence is controlled by
+\code{tie.tolerance}; use zero for exact floating-point equality only.
+This rule avoids reusing one fixed first-M subset throughout a tied score
+cell; it does not establish inference guarantees for discrete scores.
+Propensity fitting starts from zero
 coefficients and checks convergence and finite, nonsaturated fitted probabilities.
 
 Multinomial replication draws counts for the original sample units and keeps

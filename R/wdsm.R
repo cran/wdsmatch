@@ -18,7 +18,8 @@ wdsm_validate_formula <- function(formula, response, X) {
 
 wdsm_run <- function(Y, X, Z, weights, M, ps, pg, model.ps, model.pg,
                      sampling, use.bias.correction, varest, boots, alpha,
-                     estimand, call, bootstrap_counts = NULL) {
+                     estimand, call, bootstrap_counts = NULL,
+                     tie_seed = 20260917L, tie_tolerance = 64 * .Machine$double.eps) {
   scalar_integer <- function(x, minimum) is.numeric(x) && length(x) == 1L &&
     is.finite(x) && x >= minimum && x <= .Machine$integer.max && x == floor(x)
   scalar_logical <- function(x) is.logical(x) && length(x) == 1L && !is.na(x)
@@ -69,7 +70,7 @@ wdsm_run <- function(Y, X, Z, weights, M, ps, pg, model.ps, model.pg,
   if (varest) boots <- as.integer(boots)
   scores <- estimate_scores(Y, X, Z, weights, ps, pg, model.ps, model.pg,
                             sampling, estimand, use.bias.correction = use.bias.correction)
-  pt <- wdsm_point(Y, Z, weights, scores, M, estimand)
+  pt <- wdsm_point(Y, Z, weights, scores, M, estimand, tie_seed, tie_tolerance)
   pt$X_internal <- X
   result <- list(estimate = pt$estimate, se = NA_real_, ci = c(NA_real_, NA_real_),
     boot.estimates = NULL, M = M, n = n, n.treated = sum(Z == 1),
@@ -83,7 +84,7 @@ wdsm_run <- function(Y, X, Z, weights, M, ps, pg, model.ps, model.pg,
       sieve = if (use.bias.correction) "complete quadratic in each arm's own double score" else "none",
       supplied.ps.fixed = !is.null(ps), supplied.pg.fixed = !is.null(pg),
       replication = "original matches and raw weighted reuse held fixed"),
-    diagnostics = list(identity.error = pt$identity_error,
+    diagnostics = list(ties = pt$tie_diagnostics, identity.error = pt$identity_error,
                        point.ps = scores$ps_diagnostics))
   if (varest) {
     boot <- wdsm_bootstrap(pt, boots, alpha, model.ps, model.pg, sampling,
